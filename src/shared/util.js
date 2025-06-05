@@ -1136,6 +1136,18 @@ function createObjectURL(data, contentType = "", forceDataSchema = false) {
   return buffer;
 }
 
+const FontRenderOps = {
+   BEZIER_CURVE_TO: 0,
+   MOVE_TO: 1,
+   LINE_TO: 2,
+   QUADRATIC_CURVE_TO: 3,
+   RESTORE: 4,
+   SAVE: 5,
+   SCALE: 6,
+   TRANSFORM: 7,
+   TRANSLATE: 8,
+ };
+ 
 export {
   AbortException,
   AnnotationActionEventType,
@@ -1160,6 +1172,7 @@ export {
   DocumentActionEventType,
   escapeString,
   FONT_IDENTITY_MATRIX,
+  FontRenderOps,
   FontType,
   FormatError,
   getModificationDate,

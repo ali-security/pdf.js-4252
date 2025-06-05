@@ -17,6 +17,7 @@ import {
   assert,
   bytesToString,
   IsEvalSupportedCached,
+  FontRenderOps,
   shadow,
   string32,
   unreachable,
@@ -361,20 +362,13 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
 class FontFaceObject {
   constructor(
     translatedData,
-    {
-      isEvalSupported = true,
-      disableFontFace = false,
-      ignoreErrors = false,
-      onUnsupportedFeature,
-      fontRegistry = null,
-    }
+    { disableFontFace = false, ignoreErrors = false, fontRegistry = null, onUnsupportedFeature}
   ) {
     this.compiledGlyphs = Object.create(null);
     // importing translated data
     for (const i in translatedData) {
       this[i] = translatedData[i];
     }
-    this.isEvalSupported = isEvalSupported !== false;
     this.disableFontFace = disableFontFace === true;
     this.ignoreErrors = ignoreErrors === true;
     this._onUnsupportedFeature = onUnsupportedFeature;
@@ -448,34 +442,84 @@ class FontFaceObject {
         featureId: UNSUPPORTED_FEATURES.errorFontGetPath,
       });
       warn(`getPathGenerator - ignoring character: "${ex}".`);
-
+    }
+    if (!Array.isArray(cmds) || cmds.length === 0) {
       return (this.compiledGlyphs[character] = function (c, size) {
         // No-op function, to allow rendering to continue.
       });
     }
 
-    // If we can, compile cmds into JS for MAXIMUM SPEED...
-    if (this.isEvalSupported && IsEvalSupportedCached.value) {
-      const jsBuf = [];
-      for (const current of cmds) {
-        const args = current.args !== undefined ? current.args.join(",") : "";
-        jsBuf.push("c.", current.cmd, "(", args, ");\n");
+    const commands = [];
+    for (let i = 0, ii = cmds.length; i < ii; ) {
+      switch (cmds[i++]) {
+        case FontRenderOps.BEZIER_CURVE_TO:
+          {
+            const [a, b, c, d, e, f] = cmds.slice(i, i + 6);
+            commands.push(ctx => ctx.bezierCurveTo(a, b, c, d, e, f));
+            i += 6;
+          }
+          break;
+        case FontRenderOps.MOVE_TO:
+          {
+            const [a, b] = cmds.slice(i, i + 2);
+            commands.push(ctx => ctx.moveTo(a, b));
+            i += 2;
+          }
+          break;
+        case FontRenderOps.LINE_TO:
+          {
+            const [a, b] = cmds.slice(i, i + 2);
+            commands.push(ctx => ctx.lineTo(a, b));
+            i += 2;
+          }
+          break;
+        case FontRenderOps.QUADRATIC_CURVE_TO:
+          {
+            const [a, b, c, d] = cmds.slice(i, i + 4);
+            commands.push(ctx => ctx.quadraticCurveTo(a, b, c, d));
+            i += 4;
+          }
+          break;
+        case FontRenderOps.RESTORE:
+          commands.push(ctx => ctx.restore());
+          break;
+        case FontRenderOps.SAVE:
+          commands.push(ctx => ctx.save());
+          break;
+        case FontRenderOps.SCALE:
+          // The scale command must be at the third position, after save and
+          // transform (for the font matrix) commands (see also
+          // font_renderer.js).
+          // The goal is to just scale the canvas and then run the commands loop
+          // without the need to pass the size parameter to each command.
+          assert(
+            commands.length === 2,
+            "Scale command is only valid at the third position."
+          );
+          break;
+        case FontRenderOps.TRANSFORM:
+          {
+            const [a, b, c, d, e, f] = cmds.slice(i, i + 6);
+            commands.push(ctx => ctx.transform(a, b, c, d, e, f));
+            i += 6;
+          }
+          break;
+        case FontRenderOps.TRANSLATE:
+          {
+            const [a, b] = cmds.slice(i, i + 2);
+            commands.push(ctx => ctx.translate(a, b));
+            i += 2;
+          }
+          break;
       }
-      // eslint-disable-next-line no-new-func
-      return (this.compiledGlyphs[character] = new Function(
-        "c",
-        "size",
-        jsBuf.join("")
-      ));
     }
-    // ... but fall back on using Function.prototype.apply() if we're
-    // blocked from using eval() for whatever reason (like CSP policies).
-    return (this.compiledGlyphs[character] = function (c, size) {
-      for (const current of cmds) {
-        if (current.cmd === "scale") {
-          current.args = [size, -size];
-        }
-        c[current.cmd].apply(c, current.args);
+ 
+    return (this.compiledGlyphs[character] = function glyphDrawer(ctx, size) {
+      commands[0](ctx);
+      commands[1](ctx);
+      ctx.scale(size, -size);
+      for (let i = 2, ii = commands.length; i < ii; i++) {
+        commands[i](ctx);
       }
     });
   }

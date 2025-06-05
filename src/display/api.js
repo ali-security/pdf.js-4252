@@ -183,8 +183,8 @@ function setPDFNetworkStreamFactory(pdfNetworkStreamFactory) {
  *   pixels, i.e. width * height. Images above this value will not be rendered.
  *   Use -1 for no limit, which is also the default value.
  * @property {boolean} [isEvalSupported] - Determines if we can evaluate strings
- *   as JavaScript. Primarily used to improve performance of font rendering, and
- *   when parsing PDF functions. The default value is `true`.
+ *   as JavaScript. Primarily used to improve performance of PDF functions.
+ *   The default value is `true`.
  * @property {boolean} [disableFontFace] - By default fonts are converted to
  *   OpenType fonts and loaded via the Font Loading API or `@font-face` rules.
  *   If disabled, fonts will be rendered using a built-in font renderer that
@@ -499,7 +499,6 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
       disableFontFace: source.disableFontFace,
       docBaseUrl: source.docBaseUrl,
       ignoreErrors: source.ignoreErrors,
-      isEvalSupported: source.isEvalSupported,
       fontExtraProperties: source.fontExtraProperties,
       enableXfa: source.enableXfa,
       useSystemFonts: source.useSystemFonts,
@@ -2785,7 +2784,6 @@ class WorkerTransport {
             };
           }
           const font = new FontFaceObject(exportedData, {
-            isEvalSupported: params.isEvalSupported,
             disableFontFace: params.disableFontFace,
             ignoreErrors: params.ignoreErrors,
             onUnsupportedFeature: this._onUnsupportedFeature.bind(this),
